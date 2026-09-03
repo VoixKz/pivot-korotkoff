@@ -226,3 +226,54 @@ def features(x, sr=config.SR):
     log_env = (log_env - log_env.mean()) / (log_env.std() + 1e-6)
 
     return np.concatenate([bands, log_env[:, None], per[:, None]], axis=1).astype(np.float32)
+
+
+def dominant_period(env):
+    """Господствующий период пульса в секундах по автокорреляции всей огибающей.
+
+    Нужен, чтобы детектор ударов не считал вдвое: без опоры на период он
+    подхватывает промежуточные пики и выдаёт 130 уд/мин там, где на самом
+    деле 65. Возвращает None, если выраженного периода нет.
+    """
+    lo = int(config.IBI_MIN_S / config.HOP_S)
+    hi = int(config.IBI_MAX_S / config.HOP_S)
+    e = np.asarray(env, dtype=np.float64)
+    if len(e) < hi + 4:
+        return None
+    z = e - e.mean()
+    denom = float(np.dot(z, z))
+    if denom <= 0:
+        return None
+    nfft = 1 << (2 * len(z) - 1).bit_length()
+    spec = np.fft.rfft(z, n=nfft)
+    ac = np.fft.irfft(spec * np.conj(spec), n=nfft)[: len(z)] / denom
+
+    seg = ac[lo:hi]
+    if len(seg) == 0:
+        return None
+    peaks, _ = signal.find_peaks(seg)
+    if len(peaks) == 0:
+        return None
+    # Первый выраженный пик, а не глобальный максимум: максимум часто
+    # приходится на удвоенный период.
+    best = peaks[int(np.argmax(seg[peaks]))]
+    for pk in peaks:
+        if seg[pk] >= 0.8 * seg[best]:
+            best = pk
+            break
+    return float((lo + best) * config.HOP_S)
+
+
+def beat_times(x, sr=config.SR, min_prominence=0.6):
+    """Моменты ударов в аудио, опираясь на оценённый период пульса."""
+    env = rms_envelope(bandpass(x, config.BAND_LO, config.BAND_HI, sr), sr)
+    if len(env) < 10:
+        return np.zeros(0)
+    period = dominant_period(env)
+    dist_s = config.IBI_MIN_S if period is None else 0.7 * period
+    dist = max(1, int(dist_s / config.HOP_S))
+    prom = float(np.percentile(env, 75) - np.percentile(env, 25))
+    peaks, _ = signal.find_peaks(
+        env, distance=dist, prominence=max(prom * min_prominence, 1e-9)
+    )
+    return peaks * config.HOP_S
