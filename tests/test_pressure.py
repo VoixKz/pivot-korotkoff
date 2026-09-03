@@ -71,3 +71,42 @@ def test_real_file_has_expected_shape():
     r = pressure.oscillometric(tu, pu)
     assert -6.0 < r["deflation_rate"] < -2.0
     assert len(r["beat_times"]) > 10
+
+
+def test_read_pressure_tolerates_truncated_last_row(tmp_path):
+    """У pressure 145/267/275 запись оборвалась на середине последней строки."""
+    f = tmp_path / "p.csv"
+    f.write_text("0.10, 160.0\n0.12, 159.8\n0.14, 159.5\n0.16,")
+    t, p = pressure.read_pressure(f)
+    assert len(t) == 3
+    assert abs(p[-1] - 159.5) < 1e-9
+
+
+def test_read_pressure_tolerates_empty_second_field(tmp_path):
+    f = tmp_path / "p2.csv"
+    f.write_text("0.10, 160.0\n0.12, 159.8\n0.14, \n")
+    t, p = pressure.read_pressure(f)
+    assert len(t) == 2
+
+
+def test_read_pressure_rejects_file_with_too_few_rows(tmp_path):
+    f = tmp_path / "p3.csv"
+    f.write_text("0.10, 160.0\n")
+    with pytest.raises(ValueError, match="годных"):
+        pressure.read_pressure(f)
+
+
+def test_oscillometric_flags_recording_shorter_than_transient():
+    """pressure 87.csv обрывается на 1.43 с — анализировать нечего."""
+    t = np.arange(0, 1.4, 1 / config.PRESSURE_FS)
+    p = 160 - 80 * t
+    r = pressure.oscillometric(t, p)
+    assert r["too_short"] is True
+    assert len(r["beat_times"]) == 0
+    assert np.isnan(r["deflation_rate"])
+
+
+def test_oscillometric_does_not_flag_normal_recording():
+    t, p = _synth()
+    tu, pu = pressure.resample_uniform(t, p)
+    assert pressure.oscillometric(tu, pu)["too_short"] is False

@@ -17,10 +17,26 @@ from . import config
 
 
 def read_pressure(path):
-    d = np.loadtxt(Path(path), delimiter=",", ndmin=2)
-    if d.shape[1] < 2:
-        raise ValueError(f"ожидалось две колонки: {path}")
-    return d[:, 0].astype(np.float64), d[:, 1].astype(np.float64)
+    """Читает CSV вида `время_с, давление`.
+
+    Разбор построчный, а не через np.loadtxt: у части файлов запись оборвалась
+    на середине последней строки (`pressure 145`, `267`, `275`), и loadtxt на
+    них падает целиком вместо потери одной строки.
+    """
+    ts, ps = [], []
+    for line in Path(path).read_text().splitlines():
+        parts = line.split(",")
+        if len(parts) < 2:
+            continue
+        try:
+            t, p = float(parts[0]), float(parts[1])
+        except ValueError:
+            continue
+        ts.append(t)
+        ps.append(p)
+    if len(ts) < 2:
+        raise ValueError(f"меньше двух годных строк: {path}")
+    return np.asarray(ts, dtype=np.float64), np.asarray(ps, dtype=np.float64)
 
 
 def resample_uniform(t, p, fs=config.PRESSURE_FS):
@@ -30,6 +46,18 @@ def resample_uniform(t, p, fs=config.PRESSURE_FS):
 
 def oscillometric(t_u, p_u, fs=config.PRESSURE_FS):
     skip = int(config.PRESSURE_SKIP_S * fs)
+
+    # Запись короче переходного процесса анализировать нечем. Такое встречается
+    # (`pressure 87.csv` обрывается на 1.43 с) — возвращаем пустой результат,
+    # чтобы вызывающий пометил файл, а не ловил исключение.
+    if len(p_u) < skip + int(2.0 * fs):
+        return {
+            "t": t_u, "pressure": p_u, "envelope": np.zeros_like(t_u),
+            "beat_times": np.zeros(0), "beat_amps": np.zeros(0),
+            "map_t": float("nan"), "map_mmhg": float("nan"),
+            "deflation_rate": float("nan"), "too_short": True,
+        }
+
     sos = signal.butter(3, list(config.PRESSURE_BAND), btype="band", fs=fs, output="sos")
     osc = signal.sosfiltfilt(sos, p_u)
     osc[:skip] = 0.0
@@ -75,6 +103,7 @@ def oscillometric(t_u, p_u, fs=config.PRESSURE_FS):
         "map_t": float(t_u[imax]),
         "map_mmhg": float(p_u[imax]),
         "deflation_rate": rate,
+        "too_short": False,
     }
 
 
