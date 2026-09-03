@@ -36,10 +36,14 @@ python -m src.sync                  # проверка синхронности 
 python -m src.autolabel             # черновые метки по звуку
 python -m tools.make_annotator      # HTML для ручной выверки
 #   -> разметить, положить data/labels_verified.csv
-python -m src.splits                # разбиение и калибровка порогов
+python -m src.splits                # разбиение + калибровка порогов -> data/thresholds.json
+python -m src.autolabel             # перестроить метки с новыми порогами
 python -m src.train                 # обучение
 python -m src.evaluate              # отчёт
 ```
+
+Откалиброванные пороги детектора попадают в `data/thresholds.json` и
+подхватываются автоматически — править код руками не нужно.
 
 Разметчик открывать через сервер, а не двойным щелчком: Safari блокирует
 сохранение прогресса на `file://`.

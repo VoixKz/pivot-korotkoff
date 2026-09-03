@@ -95,7 +95,7 @@ def load(path=None):
 
 
 if __name__ == "__main__":
-    from . import manifest
+    from . import autolabel, manifest
 
     vpath = config.DATA_DIR / "labels_verified.csv"
     verified = read_verified(vpath) if vpath.exists() else {}
@@ -115,9 +115,11 @@ if __name__ == "__main__":
         print(f"проверено вручную: {len(verified)} "
               f"(калибровка {len(calib)}, тест {len(test_v)})")
         (rise, fall), err = calibrate_audio_ratios(calib, verified)
+        autolabel.save_thresholds(rise, fall, median_error=err, n_calib=len(calib))
         print(f"калиброванные пороги: RISE={rise:.2f} FALL={fall:.2f}, "
               f"медианная ошибка границы {err:.2f} с")
-        print("Внести в src/autolabel.py и перезапустить python -m src.autolabel")
+        print(f"сохранено в {autolabel.THRESHOLDS_PATH}")
+        print("дальше: python -m src.autolabel && python -m src.train")
     else:
         print(f"{vpath} пока нет — обучение пойдёт на черновых метках, "
               "итоговая оценка будет невозможна")

@@ -12,19 +12,50 @@
 вариант с порогом по эвристическому score давал рваные интервалы.
 """
 import csv
+import json
+from pathlib import Path
 
 import numpy as np
 from scipy import signal
 
 from . import audio, config, manifest, pressure
 
-# Доли максимума колокола, задающие границы. Подобраны всего на ЧЕТЫРЁХ
-# записях (100, 599, 1000, 70) с границами, снятыми на глаз при разведке
-# данных: средняя ошибка границы 0.67 с против 2.3 с при значении 0.35.
-# Это заведомо слабая калибровка — пересчитать в Task 8 по калибровочному
-# подмножеству размеченных человеком записей.
-RISE = 0.15  # на подъёме -> начало
-FALL = 0.15  # на спаде -> конец
+# Доли максимума колокола, задающие границы. Значения по умолчанию подобраны
+# всего на ЧЕТЫРЁХ записях (100, 599, 1000, 70) с границами, снятыми на глаз
+# при разведке данных: средняя ошибка границы 0.67 с против 2.3 с при 0.35.
+# Это заведомо слабая калибровка.
+#
+# Как только появляется ручная разметка, `python -m src.splits` пересчитывает
+# пороги по калибровочному подмножеству и кладёт их в data/thresholds.json,
+# откуда они подхватываются автоматически — вписывать руками ничего не надо.
+DEFAULT_RISE = 0.15  # на подъёме -> начало
+DEFAULT_FALL = 0.15  # на спаде -> конец
+
+THRESHOLDS_PATH = config.DATA_DIR / "thresholds.json"
+
+
+def load_thresholds(path=None):
+    """Откалиброванные пороги, если они есть, иначе значения по умолчанию."""
+    path = Path(path or THRESHOLDS_PATH)
+    if path.exists():
+        try:
+            d = json.loads(path.read_text())
+            return float(d["rise"]), float(d["fall"])
+        except Exception:
+            pass
+    return DEFAULT_RISE, DEFAULT_FALL
+
+
+def save_thresholds(rise, fall, median_error=None, n_calib=None, path=None):
+    path = Path(path or THRESHOLDS_PATH)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(
+        {"rise": float(rise), "fall": float(fall),
+         "median_error_s": median_error, "n_calibration": n_calib},
+        ensure_ascii=False, indent=2))
+
+
+RISE, FALL = load_thresholds()
 MIN_BEATS = 6
 BELL_SMOOTH_S = 2.5
 
@@ -71,8 +102,15 @@ def audio_confidence(x, sr=config.SR):
     return float(np.clip(contrast * local, 0.0, 1.0))
 
 
-def interval_from_audio(x, sr=config.SR, rise=RISE, fall=FALL, min_conf=0.15):
-    """Границы серии ударов по колоколу их амплитуд."""
+def interval_from_audio(x, sr=config.SR, rise=None, fall=None, min_conf=0.15):
+    """Границы серии ударов по колоколу их амплитуд.
+
+    Пороги по умолчанию берутся из data/thresholds.json, если он есть.
+    """
+    if rise is None or fall is None:
+        dr, df = load_thresholds()
+        rise = dr if rise is None else rise
+        fall = df if fall is None else fall
     bell, _ = beat_bell(x, sr)
     if bell is None or bell.max() <= 0:
         return None

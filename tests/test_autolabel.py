@@ -79,3 +79,21 @@ def test_confidence_is_lower_on_noise_than_on_beats():
     beats = _korotkoff(seed=4)
     noise = np.random.default_rng(5).normal(0, 0.1, config.SR * 26).astype(np.float32)
     assert autolabel.audio_confidence(beats) > autolabel.audio_confidence(noise)
+
+
+def test_thresholds_roundtrip_through_the_file(tmp_path):
+    """Откалиброванные пороги должны подхватываться без правки кода."""
+    f = tmp_path / "thresholds.json"
+    autolabel.save_thresholds(0.27, 0.33, median_error=0.41, n_calib=60, path=f)
+    assert autolabel.load_thresholds(f) == (0.27, 0.33)
+
+
+def test_load_thresholds_falls_back_on_a_broken_file(tmp_path):
+    f = tmp_path / "broken.json"
+    f.write_text("{ это не json")
+    assert autolabel.load_thresholds(f) == (autolabel.DEFAULT_RISE, autolabel.DEFAULT_FALL)
+
+
+def test_load_thresholds_falls_back_when_file_is_absent(tmp_path):
+    got = autolabel.load_thresholds(tmp_path / "nope.json")
+    assert got == (autolabel.DEFAULT_RISE, autolabel.DEFAULT_FALL)
