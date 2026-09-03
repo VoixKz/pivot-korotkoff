@@ -1,0 +1,224 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Разметка интервала тонов Короткова</title>
+<style>
+  :root { color-scheme: dark; }
+  body { font: 14px/1.5 system-ui, -apple-system, sans-serif; margin: 0; padding: 14px;
+         background: #111; color: #eee; }
+  #bar { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
+  button { background: #2a2a2a; color: #eee; border: 1px solid #444; padding: 6px 12px;
+           border-radius: 6px; cursor: pointer; font-size: 13px; }
+  button:hover { background: #3a3a3a; }
+  button.primary { background: #1d4e78; border-color: #2f6fa4; }
+  #cv { width: 100%; height: 330px; display: block; background: #181818;
+        border: 1px solid #333; border-radius: 6px; cursor: ew-resize; }
+  .num { font-variant-numeric: tabular-nums; }
+  #done { color: #7c7; }
+  #note { color: #e0a060; }
+  kbd { background: #333; border-radius: 3px; padding: 1px 5px; font-size: 12px; }
+  #meta { color: #aaa; }
+</style>
+
+<div id="bar">
+  <button id="prev">← Назад</button>
+  <button id="next">Вперёд →</button>
+  <button id="play">▶ Слушать</button>
+  <button id="play4">▶▶ ×4 (слышнее)</button>
+  <button id="accept" class="primary">✓ Принять</button>
+  <button id="skip">Пропустить</button>
+  <button id="reset">↺ Вернуть авто</button>
+  <button id="save">Сохранить CSV</button>
+  <span id="pos" class="num"></span>
+  <span id="done" class="num"></span>
+</div>
+
+<canvas id="cv"></canvas>
+
+<p id="meta" class="num"></p>
+<p id="note"></p>
+<p style="color:#888">
+  <kbd>←</kbd><kbd>→</kbd> между записями &nbsp;·&nbsp; <kbd>пробел</kbd> слушать &nbsp;·&nbsp; <kbd>f</kbd> слушать ×4
+  &nbsp;·&nbsp; <kbd>Enter</kbd> принять &nbsp;·&nbsp; <kbd>s</kbd> пропустить
+  &nbsp;·&nbsp; <kbd>r</kbd> вернуть авто.
+  Синие метки тянутся мышью. Зелёное — громкость ударов, голубое внизу — периодичность.
+  Прогресс сохраняется в браузере, случайное закрытие вкладки его не потеряет.
+</p>
+
+<script>
+const DATA = __PAYLOAD__;
+const items = DATA.items;
+const KEY = "korotkoff-annotations-v1";
+
+let state = {};
+try { state = JSON.parse(localStorage.getItem(KEY) || "{}"); } catch (e) { state = {}; }
+
+let idx = 0, drag = null, audioEl = null;
+const cv = document.getElementById("cv"), ctx = cv.getContext("2d");
+
+function cur() { return items[idx]; }
+
+function marks() {
+  const it = cur(), st = state[it.id];
+  return st ? { start: st.start, end: st.end, verified: !!st.verified, skipped: !!st.skipped }
+            : { start: it.start, end: it.end, verified: false, skipped: false };
+}
+
+function setMarks(m) {
+  state[cur().id] = m;
+  try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
+}
+
+function resize() {
+  const r = cv.getBoundingClientRect();
+  cv.width = Math.max(1, r.width * devicePixelRatio);
+  cv.height = Math.max(1, r.height * devicePixelRatio);
+  ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+  draw();
+}
+addEventListener("resize", resize);
+
+function W() { return cv.width / devicePixelRatio; }
+function H() { return cv.height / devicePixelRatio; }
+const t2x = t => (t / cur().dur) * W();
+const x2t = x => (x / W()) * cur().dur;
+
+function series(arr, top, height, colour, fill) {
+  if (!arr || !arr.length) return;
+  ctx.strokeStyle = colour;
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  arr.forEach((v, i) => {
+    const x = (i / (arr.length - 1 || 1)) * W();
+    const y = top + height - v * height;
+    i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+  });
+  ctx.stroke();
+  if (fill) {
+    ctx.lineTo(W(), top + height); ctx.lineTo(0, top + height); ctx.closePath();
+    ctx.fillStyle = fill; ctx.fill();
+  }
+}
+
+function draw() {
+  const it = cur(), m = marks();
+  ctx.clearRect(0, 0, W(), H());
+
+  ctx.fillStyle = m.verified ? "rgba(120,200,120,0.13)" : "rgba(90,170,255,0.13)";
+  ctx.fillRect(t2x(m.start), 0, t2x(m.end) - t2x(m.start), H());
+
+  series(it.env, 6, H() * 0.60, "#7fd67f", "rgba(127,214,127,0.10)");
+  series(it.per, H() * 0.68, H() * 0.28, "#68b8e8", "rgba(104,184,232,0.10)");
+
+  ctx.strokeStyle = "#333"; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0, H() * 0.66); ctx.lineTo(W(), H() * 0.66); ctx.stroke();
+
+  // секундная сетка
+  ctx.fillStyle = "#666"; ctx.font = "10px sans-serif";
+  const step = it.dur > 25 ? 5 : 2;
+  for (let s = 0; s <= it.dur; s += step) {
+    const x = t2x(s);
+    ctx.strokeStyle = "#262626";
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H()); ctx.stroke();
+    ctx.fillText(s + "с", x + 2, H() - 3);
+  }
+
+  [["start", "#4af"], ["end", "#4af"]].forEach(([k, col]) => {
+    const x = t2x(m[k]);
+    ctx.strokeStyle = col; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H()); ctx.stroke();
+    ctx.fillStyle = col; ctx.font = "12px sans-serif";
+    ctx.fillText(m[k].toFixed(2), x + 4, 14);
+  });
+
+  const nDone = Object.values(state).filter(v => v.verified).length;
+  document.getElementById("pos").textContent = `${idx + 1} / ${items.length}`;
+  document.getElementById("done").textContent = `принято ${nDone}`;
+  document.getElementById("meta").textContent =
+    `id ${it.id} · длительность ${it.dur.toFixed(1)} с · уверенность детектора ` +
+    `${it.conf.toFixed(2)} · интервал ${(m.end - m.start).toFixed(2)} с` +
+    (m.verified ? " · ПРИНЯТО" : m.skipped ? " · пропущено" : "");
+  document.getElementById("note").textContent = it.note ? "⚠ " + it.note : "";
+}
+
+cv.addEventListener("mousedown", e => {
+  const m = marks();
+  drag = Math.abs(e.offsetX - t2x(m.start)) < Math.abs(e.offsetX - t2x(m.end)) ? "start" : "end";
+});
+addEventListener("mouseup", () => { drag = null; });
+cv.addEventListener("mousemove", e => {
+  if (!drag) return;
+  const m = marks();
+  m[drag] = Math.max(0, Math.min(cur().dur, x2t(e.offsetX)));
+  if (m.start > m.end) { const t = m.start; m.start = m.end; m.end = t; }
+  setMarks(m); draw();
+});
+
+function load(i) {
+  idx = (i + items.length) % items.length;
+  if (audioEl) { audioEl.pause(); audioEl = null; }
+  draw();
+}
+
+function play(rate) {
+  if (audioEl) { audioEl.pause(); audioEl = null; return; }
+  if (!cur().audio) return;
+  audioEl = new Audio("data:audio/wav;base64," + cur().audio);
+  if (rate && rate !== 1) {
+    // Тоны Короткова лежат в 20-200 Гц и на динамиках ноутбука почти не слышны.
+    // Ускорение со сдвигом высоты переносит их в 80-800 Гц. Время при этом
+    // сжимается вчетверо — для оценки на слух, не для точной постановки меток.
+    audioEl.playbackRate = rate;
+    audioEl.preservesPitch = false;
+    audioEl.mozPreservesPitch = false;
+    audioEl.webkitPreservesPitch = false;
+  }
+  audioEl.currentTime = Math.max(0, marks().start - 0.5);
+  audioEl.play().catch(() => {});
+}
+
+function mark(flag) {
+  const m = marks();
+  m.verified = flag === "verified";
+  m.skipped = flag === "skipped";
+  setMarks(m);
+  load(idx + 1);
+}
+
+document.getElementById("prev").onclick = () => load(idx - 1);
+document.getElementById("next").onclick = () => load(idx + 1);
+document.getElementById("play").onclick = () => play(1);
+document.getElementById("play4").onclick = () => play(4);
+document.getElementById("accept").onclick = () => mark("verified");
+document.getElementById("skip").onclick = () => mark("skipped");
+document.getElementById("reset").onclick = () => {
+  delete state[cur().id];
+  try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
+  draw();
+};
+document.getElementById("save").onclick = () => {
+  const lines = ["id,start,end,verified"];
+  items.forEach(it => {
+    const st = state[it.id];
+    if (st && st.verified) {
+      lines.push(`${it.id},${st.start.toFixed(3)},${st.end.toFixed(3)},1`);
+    }
+  });
+  if (lines.length === 1) { alert("Пока ничего не принято."); return; }
+  const url = URL.createObjectURL(new Blob([lines.join("\n") + "\n"], { type: "text/csv" }));
+  const a = document.createElement("a");
+  a.href = url; a.download = "labels_verified.csv"; a.click();
+  URL.revokeObjectURL(url);
+};
+
+addEventListener("keydown", e => {
+  if (e.key === "ArrowLeft") load(idx - 1);
+  else if (e.key === "ArrowRight") load(idx + 1);
+  else if (e.key === " ") { e.preventDefault(); play(1); }
+  else if (e.key === "f") play(4);
+  else if (e.key === "Enter") mark("verified");
+  else if (e.key === "s") mark("skipped");
+  else if (e.key === "r") document.getElementById("reset").click();
+});
+
+resize();
+</script>
