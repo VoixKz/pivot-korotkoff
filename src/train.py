@@ -60,7 +60,8 @@ def positive_fraction(ds):
     return float(np.clip(tot_pos / tot_all, 0.05, 0.95))
 
 
-def run(epochs=60, batch_size=8, lr=3e-4, patience=10, out_dir=None, labels_path=None):
+def run(epochs=60, batch_size=8, lr=3e-4, patience=10, out_dir=None,
+        labels_path=None, num_workers=4):
     out_dir = Path(out_dir or config.PROJECT_ROOT / "runs")
     out_dir.mkdir(parents=True, exist_ok=True)
     sp = splits.load()
@@ -71,8 +72,15 @@ def run(epochs=60, batch_size=8, lr=3e-4, patience=10, out_dir=None, labels_path
     if len(tr) == 0 or len(va) == 0:
         raise RuntimeError(f"пустая выборка: train={len(tr)}, val={len(va)}")
 
-    dl_tr = DataLoader(tr, batch_size=batch_size, shuffle=True, collate_fn=dataset.collate)
-    dl_va = DataLoader(va, batch_size=batch_size, shuffle=False, collate_fn=dataset.collate)
+    # Признаки для аугментированных записей считаются заново на каждой эпохе,
+    # и в один поток это около полутора минут на эпоху. Рабочие процессы
+    # переносят узкое место на видеоускоритель.
+    dl_kw = {"collate_fn": dataset.collate, "num_workers": num_workers}
+    if num_workers > 0:
+        dl_kw["persistent_workers"] = True
+        dl_kw["prefetch_factor"] = 2
+    dl_tr = DataLoader(tr, batch_size=batch_size, shuffle=True, **dl_kw)
+    dl_va = DataLoader(va, batch_size=batch_size, shuffle=False, **dl_kw)
 
     frac = positive_fraction(tr)
     pos_weight = torch.tensor((1 - frac) / frac)
@@ -97,7 +105,7 @@ def run(epochs=60, batch_size=8, lr=3e-4, patience=10, out_dir=None, labels_path
             loss.backward()
             torch.nn.utils.clip_grad_norm_(net.parameters(), 5.0)
             opt.step()
-            tot += float(loss) * len(x)
+            tot += float(loss.detach()) * len(x)
         sched.step()
 
         net.eval()
@@ -130,5 +138,7 @@ if __name__ == "__main__":
     ap.add_argument("--batch-size", type=int, default=8)
     ap.add_argument("--lr", type=float, default=3e-4)
     ap.add_argument("--labels", default=None, help="CSV с метками для обучения")
+    ap.add_argument("--workers", type=int, default=4, help="процессов загрузки данных")
     a = ap.parse_args()
-    run(epochs=a.epochs, batch_size=a.batch_size, lr=a.lr, labels_path=a.labels)
+    run(epochs=a.epochs, batch_size=a.batch_size, lr=a.lr,
+        labels_path=a.labels, num_workers=a.workers)

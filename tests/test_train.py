@@ -58,3 +58,21 @@ def test_loss_decreases_on_a_tiny_overfit_run():
         if first is None:
             first = last
     assert last < first * 0.5, f"потери упали лишь с {first:.3f} до {last:.3f}"
+
+
+def test_positive_fraction_is_clamped_to_a_usable_range():
+    class _DS:
+        ids = [1, 2]
+        labels = {1: (0.0, 0.0), 2: (0.0, 0.0)}  # вырожденный случай: меток нет
+        rows = {1: {"dur_s": 20.0}, 2: {"dur_s": 20.0}}
+
+    assert train.positive_fraction(_DS()) == 0.05
+
+
+def test_positive_fraction_matches_hand_computed_value():
+    class _DS:
+        ids = [1, 2]
+        labels = {1: (2.0, 12.0), 2: (0.0, 10.0)}
+        rows = {1: {"dur_s": 20.0}, 2: {"dur_s": 20.0}}
+
+    assert abs(train.positive_fraction(_DS()) - 0.5) < 1e-9
