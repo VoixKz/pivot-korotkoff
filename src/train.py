@@ -61,7 +61,7 @@ def positive_fraction(ds):
 
 
 def run(epochs=60, batch_size=8, lr=3e-4, patience=10, out_dir=None,
-        labels_path=None, num_workers=4):
+        labels_path=None, num_workers=4, device=None):
     out_dir = Path(out_dir or config.PROJECT_ROOT / "runs")
     out_dir.mkdir(parents=True, exist_ok=True)
     sp = splits.load()
@@ -84,7 +84,7 @@ def run(epochs=60, batch_size=8, lr=3e-4, patience=10, out_dir=None,
 
     frac = positive_fraction(tr)
     pos_weight = torch.tensor((1 - frac) / frac)
-    dev = model.pick_device()
+    dev = model.pick_device(device)
     net = model.KorotkoffNet().to(dev)
     print(f"обучение: {len(tr)} записей, проверка: {len(va)}", flush=True)
     print(f"доля положительных кадров {frac:.2f}, pos_weight {float(pos_weight):.2f}", flush=True)
@@ -139,6 +139,7 @@ if __name__ == "__main__":
     ap.add_argument("--lr", type=float, default=3e-4)
     ap.add_argument("--labels", default=None, help="CSV с метками для обучения")
     ap.add_argument("--workers", type=int, default=4, help="процессов загрузки данных")
+    ap.add_argument("--device", default=None, help="cpu / mps / cuda; по умолчанию см. model.pick_device")
     a = ap.parse_args()
     run(epochs=a.epochs, batch_size=a.batch_size, lr=a.lr,
-        labels_path=a.labels, num_workers=a.workers)
+        labels_path=a.labels, num_workers=a.workers, device=a.device)

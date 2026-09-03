@@ -45,3 +45,12 @@ def test_pick_device_returns_a_usable_device():
     d = model.pick_device()
     torch.zeros(2, 2, device=d)
     assert d.type in ("mps", "cuda", "cpu")
+
+
+def test_pick_device_defaults_away_from_mps():
+    """Замер на M5: MPS 1269 мс/шаг против 419 у CPU — BiGRU на нём проигрывает."""
+    assert model.pick_device().type != "mps"
+
+
+def test_pick_device_honours_explicit_preference():
+    assert model.pick_device("cpu").type == "cpu"

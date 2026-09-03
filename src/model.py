@@ -40,9 +40,26 @@ def count_parameters(m):
     return sum(p.numel() for p in m.parameters() if p.requires_grad)
 
 
-def pick_device():
-    if torch.backends.mps.is_available():
-        return torch.device("mps")
+def pick_device(prefer=None):
+    """Устройство для обучения и инференса.
+
+    По умолчанию CPU, и это не оплошность. Замер на Apple M5 (батч 8,
+    длины как в реальных данных):
+
+        MPS, разные длины      1269 мс/шаг
+        MPS, постоянная длина   969 мс/шаг
+        CPU, разные длины       419 мс/шаг
+
+    Модель маленькая (356 тыс. параметров), а BiGRU последователен по
+    времени: на запись в 1400 кадров приходится 1400 мелких запусков ядер,
+    и накладные расходы MPS съедают всю выгоду от ускорителя. Разброс длин
+    добавляет MPS ещё около 30% на перекомпиляцию под каждую новую форму.
+
+    CUDA выбирается, если есть: там картина другая, ядра запускаются дешевле.
+    Перекрыть выбор можно параметром prefer или флагом --device.
+    """
+    if prefer:
+        return torch.device(prefer)
     if torch.cuda.is_available():
         return torch.device("cuda")
     return torch.device("cpu")

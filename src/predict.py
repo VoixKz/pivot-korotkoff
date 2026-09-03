@@ -17,11 +17,11 @@ from . import audio, config, model, postprocess
 _CACHE = {}
 
 
-def load_model(ckpt=None):
+def load_model(ckpt=None, device=None):
     ckpt = Path(ckpt or config.PROJECT_ROOT / "runs" / "best.pt")
-    key = str(ckpt)
+    key = (str(ckpt), device)
     if key not in _CACHE:
-        dev = model.pick_device()
+        dev = model.pick_device(device)
         net = model.KorotkoffNet().to(dev)
         state = torch.load(ckpt, map_location=dev, weights_only=True)
         net.load_state_dict(state["state_dict"])
