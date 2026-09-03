@@ -1,0 +1,9 @@
+data/cache/
+data/*.csv
+data/*.html
+data/*.json
+__pycache__/
+*.pyc
+.pytest_cache/
+runs/
+*.pt
