@@ -76,3 +76,33 @@ def test_positive_fraction_matches_hand_computed_value():
         rows = {1: {"dur_s": 20.0}, 2: {"dur_s": 20.0}}
 
     assert abs(train.positive_fraction(_DS()) - 0.5) < 1e-9
+
+
+def test_verified_labels_override_draft_ones(tmp_path, monkeypatch):
+    """Ручная разметка качественнее черновой — обучение обязано брать её."""
+    from src import config, splits
+
+    monkeypatch.setattr(config, "DATA_DIR", tmp_path)
+    (tmp_path / "labels_auto.csv").write_text(
+        "id,start,end,confidence,priority,source,note\n"
+        "1,0.0,5.0,0.5,1.0,audio,\n2,0.0,5.0,0.5,1.0,audio,\n3,0.0,5.0,0.5,1.0,audio,\n"
+    )
+    (tmp_path / "labels_verified.csv").write_text(
+        "id,start,end,verified\n2,1.0,9.0,1\n3,2.0,8.0,1\n"
+    )
+    monkeypatch.setattr(splits, "read_verified", lambda p=None: {2: (1.0, 9.0), 3: (2.0, 8.0)})
+
+    labels = train.build_label_set({"verified_test": [3]})
+    assert labels[1] == (0.0, 5.0), "запись без ручной метки остаётся с черновой"
+    assert labels[2] == (1.0, 9.0), "ручная метка должна перекрыть черновую"
+    assert labels[3] == (0.0, 5.0), "тестовая запись не должна попасть в обучение"
+
+
+def test_build_label_set_works_without_manual_labels(tmp_path, monkeypatch):
+    from src import config
+
+    monkeypatch.setattr(config, "DATA_DIR", tmp_path)
+    (tmp_path / "labels_auto.csv").write_text(
+        "id,start,end,confidence,priority,source,note\n7,1.0,4.0,0.5,1.0,audio,\n"
+    )
+    assert train.build_label_set({})[7] == (1.0, 4.0)

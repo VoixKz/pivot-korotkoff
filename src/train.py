@@ -60,12 +60,36 @@ def positive_fraction(ds):
     return float(np.clip(tot_pos / tot_all, 0.05, 0.95))
 
 
+def build_label_set(sp, labels_path=None):
+    """Метки для обучения: ручные там, где они есть, иначе черновые.
+
+    Ручная разметка калибровочных записей качественнее черновой, и не
+    использовать её было бы расточительством. Тестовые записи сюда не
+    попадают: они исключены из пула ещё в src.splits.
+    """
+    labels = dataset.read_labels(labels_path or config.DATA_DIR / "labels_auto.csv")
+    vpath = config.DATA_DIR / "labels_verified.csv"
+    if not vpath.exists():
+        return labels
+
+    verified = splits.read_verified(vpath)
+    test_ids = set(sp.get("verified_test", []))
+    n_used = 0
+    for rid, iv in verified.items():
+        if rid in test_ids:
+            continue  # тестовые записи не должны попасть в обучение ни при каких условиях
+        labels[rid] = iv
+        n_used += 1
+    print(f"ручных меток подмешано в обучение: {n_used}", flush=True)
+    return labels
+
+
 def run(epochs=60, batch_size=8, lr=3e-4, patience=10, out_dir=None,
         labels_path=None, num_workers=4, device=None):
     out_dir = Path(out_dir or config.PROJECT_ROOT / "runs")
     out_dir.mkdir(parents=True, exist_ok=True)
     sp = splits.load()
-    labels = dataset.read_labels(labels_path or config.DATA_DIR / "labels_auto.csv")
+    labels = build_label_set(sp, labels_path)
 
     tr = dataset.KorotkoffDataset(sp["train"], labels, augment=True)
     va = dataset.KorotkoffDataset(sp["val"], labels, augment=False)
