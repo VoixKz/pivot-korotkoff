@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="ru">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Детекция интервала тонов Короткова</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0f1113; --panel: #171a1e; --line: #2a2f36; --text: #e8eaed;
+    --dim: #9aa3ad; --accent: #4a9eff; --ok: #5cc98a; --warn: #e8a33d;
+  }
+  * { box-sizing: border-box; }
+  body { font: 14px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0;
+         padding: 24px 16px 60px; background: var(--bg); color: var(--text); }
+  .wrap { max-width: 1100px; margin: 0 auto; }
+  h1 { font-size: 22px; margin: 0 0 6px; }
+  .sub { color: var(--dim); margin: 0 0 6px; }
+  #modelinfo { color: var(--dim); font-size: 12px; margin: 0 0 20px;
+               font-variant-numeric: tabular-nums; }
+
+  #drop { border: 1.5px dashed #39414c; border-radius: 12px; padding: 30px 20px;
+          text-align: center; transition: .15s; background: #13161a; }
+  #drop.over { border-color: var(--accent); background: #16202c; }
+  #drop p { margin: 0 0 14px; color: var(--dim); }
+  .btns { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+
+  button, .filebtn { background: #232830; color: var(--text); border: 1px solid var(--line);
+    padding: 9px 16px; border-radius: 7px; cursor: pointer; font: inherit; font-size: 13px; }
+  button:hover, .filebtn:hover { background: #2d333c; border-color: #3a424c; }
+  .filebtn { display: inline-block; }
+  .filebtn input { display: none; }
+  button.primary { background: #1d5c8f; border-color: #2f79b5; }
+  button.primary:hover { background: #226aa4; }
+
+  #status { margin: 14px 0 0; color: var(--warn); min-height: 22px; }
+
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+          margin-top: 22px; overflow: hidden; }
+  .card > .hd { padding: 12px 14px; display: flex; gap: 12px; align-items: baseline;
+                flex-wrap: wrap; border-bottom: 1px solid var(--line); }
+  .hd .name { font-weight: 600; }
+  .hd .meta { color: var(--dim); font-size: 12px; font-variant-numeric: tabular-nums; }
+
+  #cv { width: 100%; height: 300px; display: block; background: #121519; cursor: pointer; }
+
+  .player { display: flex; align-items: center; gap: 12px; padding: 11px 14px;
+            border-top: 1px solid var(--line); flex-wrap: wrap; }
+  .seek { flex: 1 1 200px; height: 6px; background: #2a2f36; border-radius: 3px;
+          position: relative; cursor: pointer; min-width: 140px; }
+  .seek .fill { position: absolute; inset: 0 auto 0 0; background: var(--accent);
+                border-radius: 3px; width: 0; }
+  .time { font-variant-numeric: tabular-nums; color: var(--dim); font-size: 13px;
+          white-space: nowrap; }
+  select { background: #232830; color: var(--text); border: 1px solid var(--line);
+           padding: 6px 9px; border-radius: 6px; font: inherit; font-size: 13px; }
+
+  .nums { display: flex; gap: 30px; padding: 14px; flex-wrap: wrap;
+          border-top: 1px solid var(--line); }
+  .num { min-width: 92px; }
+  .num .v { font-size: 26px; font-weight: 600; font-variant-numeric: tabular-nums;
+            line-height: 1.15; }
+  .num .v.ok { color: var(--ok); }
+  .num .k { color: var(--dim); font-size: 12px; }
+  #verdict { color: var(--warn); padding: 0 14px 14px; }
+
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; padding: 0 14px 14px;
+            color: var(--dim); font-size: 12px; }
+  .legend i { display: inline-block; width: 11px; height: 11px; border-radius: 2px;
+              margin-right: 5px; vertical-align: -1px; }
+
+  .note { background: rgba(232,163,61,.10); border: 1px solid rgba(232,163,61,.3);
+          color: #f0c583; border-radius: 8px; padding: 10px 12px; margin: 14px 14px 0;
+          font-size: 13px; }
+
+  details { margin-top: 26px; color: var(--dim); }
+  summary { cursor: pointer; color: var(--accent); font-size: 14px; }
+  details div { margin-top: 10px; font-size: 13px; }
+  code { background: #1c2127; padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+  table { border-collapse: collapse; margin: 10px 0; font-size: 13px; }
+  td, th { padding: 4px 16px 4px 0; text-align: left; }
+  th { color: var(--text); border-bottom: 1px solid var(--line); }
+</style>
+
+<div class="wrap">
+  <h1>Детекция интервала тонов Короткова</h1>
+  <p class="sub">
+    Загрузите запись измерения артериального давления — модель найдёт, где начинаются
+    и где заканчиваются слышимые удары. Всё считается прямо в браузере, файл никуда
+    не отправляется.
+  </p>
+  <p id="modelinfo">загружаю модель…</p>
+
+  <div id="drop">
+    <p>Перетащите сюда аудиофайл — WAV, MP3, M4A, OGG</p>
+    <div class="btns">
+      <label class="filebtn">Выбрать файл<input id="file" type="file" accept="audio/*"></label>
+      <button id="demo" class="primary">Показать на примере</button>
+    </div>
+  </div>
+
+  <p id="status"></p>
+
+  <div class="card" id="result" hidden>
+    <div class="hd">
+      <span class="name" id="fname"></span>
+      <span class="meta" id="fmeta"></span>
+    </div>
+
+    <p class="note" id="warn" hidden>
+      Заголовок этого WAV объявляет больше данных, чем в файле. Прочитано по
+      фактическому размеру — так же, как при обучении.
+    </p>
+
+    <canvas id="cv"></canvas>
+
+    <div class="player">
+      <button id="play">▶ Слушать</button>
+      <span class="time" id="time">0:00,0 / 0:00,0</span>
+      <div class="seek" id="seek"><div class="fill" id="fill"></div></div>
+      <span class="time">тон:</span>
+      <select id="rate">
+        <option value="1">×1</option>
+        <option value="2">×2</option>
+        <option value="4" selected>×4</option>
+      </select>
+    </div>
+
+    <div class="nums">
+      <div class="num"><div class="v ok" id="t0">—</div><div class="k">начало, с</div></div>
+      <div class="num"><div class="v ok" id="t1">—</div><div class="k">конец, с</div></div>
+      <div class="num"><div class="v" id="tlen">—</div><div class="k">длительность, с</div></div>
+      <div class="num"><div class="v" id="tconf">—</div><div class="k">уверенность</div></div>
+    </div>
+    <p id="verdict"></p>
+
+    <div class="legend">
+      <span><i style="background:#7fd67f"></i>громкость ударов, 20–200 Гц</span>
+      <span><i style="background:#ffb648"></i>вероятность от модели (пунктир — порог 0.5)</span>
+      <span><i style="background:#68b8e8"></i>периодичность</span>
+      <span><i style="background:#5cc98a"></i>найденные границы</span>
+    </div>
+  </div>
+
+  <details>
+    <summary>Как это устроено</summary>
+    <div>
+      <p>Страница статическая: нет ни сервера, ни загрузки данных на сторону.
+      Модель весит 1.4 МБ, приходит в формате ONNX и считается в WebAssembly
+      через ONNX Runtime Web.</p>
+
+      <table>
+        <tr><th>шаг</th><th>что происходит</th></tr>
+        <tr><td>чтение</td><td>WAV разбирается вручную по фактическому размеру: у этого
+          прибора заголовок всегда объявляет 60 с, а данных меньше. Прочие форматы —
+          через декодер браузера</td></tr>
+        <tr><td>приведение</td><td>к 8000 Гц, полезная полоса сигнала ниже 4 кГц</td></tr>
+        <tr><td>признаки</td><td>42 числа на кадр каждые 20 мс: 40 логарифмических полос
+          20–500 Гц, RMS-огибающая полосы 20–200 Гц, скользящая оценка периодичности</td></tr>
+        <tr><td>модель</td><td>расширенные свёртки (рецептивное поле 2.34 с) → BiGRU →
+          вероятность на каждый кадр</td></tr>
+        <tr><td>границы</td><td>медианный фильтр 0.5 с, порог 0.5, сшивание разрывов
+          короче 3 с, самый длинный участок, уточнение границ интерполяцией</td></tr>
+      </table>
+
+      <p>Разрывы сшиваются намеренно: у части людей тоны пропадают в середине и
+      возвращаются — это аускультативный провал, а не конец интервала.</p>
+
+      <p>Реализация признаков на JavaScript численно сверена с обучающей на
+      scipy: расхождение не превышает 1e-7 на всех этапах. Проверка лежит
+      в <code>parity.html</code>.</p>
+    </div>
+  </details>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/ort.min.js"></script>
+<script type="module" src="./app.js"></script>
+</html>

@@ -1,0 +1,17 @@
+{
+  "sr": 8000,
+  "hop_s": 0.02,
+  "win_s": 0.05,
+  "n_bands": 40,
+  "n_features": 42,
+  "band_lo": 20.0,
+  "band_hi": 200.0,
+  "mel_lo": 20.0,
+  "mel_hi": 500.0,
+  "ibi_min_s": 0.33,
+  "ibi_max_s": 1.6,
+  "periodicity_win_s": 4.0,
+  "iou": 0.830233919620514,
+  "epoch": 13,
+  "n_train": 547
+}
