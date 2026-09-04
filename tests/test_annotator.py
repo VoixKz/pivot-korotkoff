@@ -59,14 +59,28 @@ def test_build_payload_sorts_by_priority_descending():
     assert [it["id"] for it in p["items"]] == [2, 3, 1]
 
 
-def test_build_payload_respects_limit_and_offset():
+def test_hard_strategy_slices_the_ranked_list_contiguously():
     rows = [{"id": i, "wav_path": str(i), "dur_s": 10.0} for i in range(1, 11)]
     labels = {i: {"start": 0.0, "end": 1.0, "priority": float(10 - i),
                   "confidence": 0.5, "note": ""} for i in range(1, 11)}
-    first = mk.build_payload(rows, labels, limit=4, load_audio=False)
-    second = mk.build_payload(rows, labels, limit=4, offset=4, load_audio=False)
+    first = mk.build_payload(rows, labels, limit=4, load_audio=False, strategy="hard")
+    second = mk.build_payload(rows, labels, limit=4, offset=4, load_audio=False,
+                              strategy="hard")
     assert [it["id"] for it in first["items"]] == [1, 2, 3, 4]
     assert [it["id"] for it in second["items"]] == [5, 6, 7, 8]
+
+
+def test_offset_gives_a_different_batch_under_spread():
+    """Второй файл разметки не должен повторять первый."""
+    rows = [{"id": i, "wav_path": str(i), "dur_s": 10.0} for i in range(1, 41)]
+    labels = {i: {"start": 0.0, "end": 1.0, "priority": float(40 - i),
+                  "confidence": 0.5, "note": ""} for i in range(1, 41)}
+    a = {it["id"] for it in mk.build_payload(rows, labels, limit=10,
+                                             load_audio=False)["items"]}
+    b = {it["id"] for it in mk.build_payload(rows, labels, limit=10, offset=1,
+                                             load_audio=False)["items"]}
+    assert a and b
+    assert not (a & b), "выборки со смежными offset пересекаться не должны"
 
 
 def test_build_payload_skips_records_without_labels():
@@ -120,3 +134,45 @@ def test_playable_keeps_quiet_beats_audible_next_to_a_loud_artifact():
     y = mk._playable(x)
     assert np.max(np.abs(y)) <= 0.95
     assert float(np.mean(np.abs(y))) > 0.3, "полезный сигнал должен остаться слышимым"
+
+
+def _fake(n):
+    rows = [{"id": i, "dur_s": 20.0, "wav_path": f"/nope/{i}.wav"} for i in range(n)]
+    labels = {i: {"start": 1.0, "end": 5.0, "priority": float(i), "confidence": 0.5,
+                  "note": ""} for i in range(n)}
+    return rows, labels
+
+
+def test_spread_selection_covers_the_whole_priority_range():
+    """Отбор одних трудных случаев сместил бы обучающую выборку."""
+    rows, labels = _fake(400)
+    got = mk.select(rows, labels, limit=40, offset=0, strategy="spread")
+    prios = [labels[r["id"]]["priority"] for r in got]
+    assert len(got) == 40
+    assert max(prios) > 380, "самые трудные должны попасть"
+    assert min(prios) < 20, "самые простые тоже"
+
+
+def test_hard_selection_takes_only_the_worst():
+    rows, labels = _fake(400)
+    got = mk.select(rows, labels, limit=40, offset=0, strategy="hard")
+    prios = [labels[r["id"]]["priority"] for r in got]
+    assert min(prios) >= 360, "режим hard берёт только верх списка"
+
+
+def test_selection_returns_no_duplicates():
+    rows, labels = _fake(400)
+    for strategy in ("spread", "hard"):
+        got = mk.select(rows, labels, 40, 0, strategy)
+        assert len({r["id"] for r in got}) == len(got)
+
+
+def test_selection_handles_limit_larger_than_pool():
+    rows, labels = _fake(10)
+    assert len(mk.select(rows, labels, 50, 0, "spread")) == 10
+
+
+def test_payload_carries_priority_for_client_side_sorting():
+    rows, labels = _fake(5)
+    payload = mk.build_payload(rows, labels, limit=5, load_audio=False)
+    assert all("prio" in it for it in payload["items"])

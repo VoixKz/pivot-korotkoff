@@ -2,72 +2,211 @@
 <meta charset="utf-8">
 <title>Разметка интервала тонов Короткова</title>
 <style>
-  :root { color-scheme: dark; }
-  body { font: 14px/1.5 system-ui, -apple-system, sans-serif; margin: 0; padding: 14px;
-         background: #111; color: #eee; }
-  #bar { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
-  button { background: #2a2a2a; color: #eee; border: 1px solid #444; padding: 6px 12px;
-           border-radius: 6px; cursor: pointer; font-size: 13px; }
-  button:hover { background: #3a3a3a; }
-  button.primary { background: #1d4e78; border-color: #2f6fa4; }
-  #cv { width: 100%; height: 330px; display: block; background: #181818;
-        border: 1px solid #333; border-radius: 6px; cursor: ew-resize; }
-  .num { font-variant-numeric: tabular-nums; }
-  #done { color: #7c7; }
-  #note { color: #e0a060; }
-  kbd { background: #333; border-radius: 3px; padding: 1px 5px; font-size: 12px; }
-  #meta { color: #aaa; }
+  :root {
+    color-scheme: dark;
+    --bg: #0f1113; --panel: #171a1e; --line: #2a2f36; --text: #e8eaed;
+    --dim: #9aa3ad; --accent: #4a9eff; --ok: #5cc98a; --warn: #e8a33d;
+  }
+  * { box-sizing: border-box; }
+  body { font: 14px/1.5 system-ui, -apple-system, sans-serif; margin: 0; padding: 16px;
+         background: var(--bg); color: var(--text); }
+  .wrap { max-width: 1400px; margin: 0 auto; }
+
+  h1 { font-size: 15px; margin: 0 0 4px; font-weight: 600; }
+  .lede { color: var(--dim); margin: 0 0 14px; font-size: 13px; }
+  .lede b { color: var(--text); font-weight: 600; }
+
+  .head { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
+          padding: 10px 12px; background: var(--panel); border: 1px solid var(--line);
+          border-radius: 8px 8px 0 0; border-bottom: none; }
+  .head .id { font-size: 15px; font-weight: 600; }
+  .head .meta { color: var(--dim); font-variant-numeric: tabular-nums; }
+  .head .spacer { margin-left: auto; }
+  .badge { padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+  .badge.done { background: rgba(92,201,138,.16); color: var(--ok); }
+  .badge.skip { background: rgba(154,163,173,.16); color: var(--dim); }
+
+  #cv { width: 100%; height: 340px; display: block; background: #121519;
+        border: 1px solid var(--line); border-left-width: 1px; border-right-width: 1px; }
+
+  .player { display: flex; align-items: center; gap: 12px; padding: 10px 12px;
+            background: var(--panel); border: 1px solid var(--line); border-top: none;
+            flex-wrap: wrap; }
+  .seek { flex: 1 1 220px; height: 6px; background: #2a2f36; border-radius: 3px;
+          position: relative; cursor: pointer; min-width: 160px; }
+  .seek .fill { position: absolute; inset: 0 auto 0 0; background: var(--accent);
+                border-radius: 3px; width: 0; }
+  .time { font-variant-numeric: tabular-nums; color: var(--dim); font-size: 13px;
+          white-space: nowrap; }
+  .rates { display: flex; gap: 0; }
+  .rates button { border-radius: 0; margin: 0; border-right-width: 0; }
+  .rates button:first-child { border-radius: 6px 0 0 6px; }
+  .rates button:last-child { border-radius: 0 6px 6px 0; border-right-width: 1px; }
+  .rates button.on { background: #24405e; border-color: #3d6f9e; color: #cfe4ff; }
+
+  .actions { display: flex; align-items: center; gap: 8px; padding: 10px 12px;
+             background: var(--panel); border: 1px solid var(--line); border-top: none;
+             border-radius: 0 0 8px 8px; flex-wrap: wrap; }
+  .actions .spacer { margin-left: auto; }
+
+  button { background: #232830; color: var(--text); border: 1px solid var(--line);
+           padding: 7px 13px; border-radius: 6px; cursor: pointer; font-size: 13px;
+           font-family: inherit; }
+  button:hover:not(:disabled) { background: #2d333c; border-color: #3a424c; }
+  button:disabled { opacity: .4; cursor: default; }
+  button.go { background: #1f6b45; border-color: #2c8f5e; font-weight: 600; }
+  button.go:hover:not(:disabled) { background: #257a50; }
+  button.play { min-width: 104px; font-weight: 600; }
+
+  select { background: #232830; color: var(--text); border: 1px solid var(--line);
+           padding: 6px 9px; border-radius: 6px; font-family: inherit; font-size: 13px; }
+
+  .warn { margin: 12px 0 0; padding: 10px 12px; border-radius: 8px; font-size: 13px;
+          background: rgba(232,163,61,.10); border: 1px solid rgba(232,163,61,.3);
+          color: #f0c583; }
+  .warn b { color: var(--warn); }
+
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin: 12px 0 0;
+            color: var(--dim); font-size: 12px; }
+  .legend i { display: inline-block; width: 11px; height: 11px; border-radius: 2px;
+              margin-right: 5px; vertical-align: -1px; }
+
+  details { margin-top: 12px; color: var(--dim); font-size: 13px; }
+  summary { cursor: pointer; color: var(--accent); }
+  details ul { margin: 8px 0; padding-left: 20px; }
+  details li { margin: 4px 0; }
+  kbd { background: #262c34; border: 1px solid var(--line); border-radius: 4px;
+        padding: 1px 6px; font-size: 12px; font-family: inherit; }
+
+  .bar { height: 4px; background: #22272e; border-radius: 2px; overflow: hidden;
+         margin-top: 10px; }
+  .bar i { display: block; height: 100%; background: var(--ok); width: 0; }
 </style>
 
-<div id="bar">
-  <button id="prev">← Назад</button>
-  <button id="next">Вперёд →</button>
-  <button id="play">▶ Слушать</button>
-  <button id="play4">▶▶ ×4 (слышнее)</button>
-  <button id="accept" class="primary">✓ Принять</button>
-  <button id="skip">Пропустить</button>
-  <button id="reset">↺ Вернуть авто</button>
-  <button id="save">Сохранить CSV</button>
-  <span id="pos" class="num"></span>
-  <span id="done" class="num"></span>
+<div class="wrap">
+  <h1>Разметка интервала тонов Короткова</h1>
+  <p class="lede">
+    Поставьте две метки: где <b>появляется</b> первый удар и где <b>пропадает</b> последний.
+    Между ними удары идут подряд и нарастают-затухают колоколом. Метки тянутся мышью,
+    клик по пустому месту — перемотка.
+  </p>
+
+  <div class="head">
+    <span class="id" id="rid"></span>
+    <span class="meta" id="meta"></span>
+    <span class="badge" id="badge" hidden></span>
+    <span class="spacer"></span>
+    <span class="meta" id="pos"></span>
+    <span class="meta" id="done"></span>
+  </div>
+
+  <canvas id="cv"></canvas>
+
+  <div class="player">
+    <button id="play" class="play">▶ Слушать</button>
+    <span class="time" id="time">0:00,0 / 0:00,0</span>
+    <div class="seek" id="seek"><div class="fill" id="fill"></div></div>
+    <span class="time">тон:</span>
+    <div class="rates">
+      <button data-rate="1">×1</button>
+      <button data-rate="2">×2</button>
+      <button data-rate="4" class="on">×4</button>
+    </div>
+  </div>
+
+  <div class="actions">
+    <button id="accept" class="go">✓ Метки верны — дальше</button>
+    <button id="skip">✗ Не разобрать</button>
+    <button id="reset">↺ Сбросить метки</button>
+    <span class="spacer"></span>
+    <button id="prev">← Пред.</button>
+    <button id="next">След. →</button>
+    <select id="order" title="Порядок записей">
+      <option value="easy">Сначала понятные</option>
+      <option value="hard">Сначала трудные</option>
+      <option value="id">По номеру записи</option>
+    </select>
+    <button id="save">⬇ Скачать разметку</button>
+  </div>
+
+  <div class="bar"><i id="barfill"></i></div>
+
+  <p class="warn" id="warn" hidden></p>
+
+  <div class="legend">
+    <span><i style="background:#7fd67f"></i>громкость ударов (полоса 20–200 Гц)</span>
+    <span><i style="background:#68b8e8"></i>периодичность — насколько ритмично звучит</span>
+    <span><i style="background:#4a9eff"></i>ваши метки</span>
+    <span><i style="background:#f5f5f5"></i>текущий момент воспроизведения</span>
+  </div>
+
+  <details>
+    <summary>Как размечать и что делают кнопки</summary>
+    <ul>
+      <li><b>Что искать.</b> Зелёная кривая — громкость ударов. В норме видно, как удары
+        появляются, нарастают до максимума и затухают. Начало интервала — первый различимый
+        удар, конец — последний. Голубая кривая внизу помогает: она высокая там, где звук
+        ритмичен, то есть где действительно бьётся пульс, а не шумит манжета.</li>
+      <li><b>Про звук.</b> Тоны Короткова лежат в 20–200 Гц и на динамиках ноутбука почти
+        не слышны. Кнопки <kbd>×2</kbd> и <kbd>×4</kbd> ускоряют запись со сдвигом высоты,
+        перенося удары в слышимый диапазон. Время при этом сжимается, поэтому на слух
+        удобно оценивать, а метки ставить лучше по картинке.</li>
+      <li><b>✓ Метки верны</b> — записывает текущее положение меток как эталон и переходит
+        к следующей записи. Только принятые записи попадают в итоговый файл.</li>
+      <li><b>✗ Не разобрать</b> — если удары не видно и не слышно. Запись помечается
+        пропущенной и в обучение не идёт. Пропускать не стыдно, честный пропуск лучше
+        выдуманной метки.</li>
+      <li><b>↺ Сбросить метки</b> — вернуть метки туда, где их поставил автодетектор,
+        отменив ваши перетаскивания.</li>
+      <li><b>⬇ Скачать разметку</b> — сохраняет файл <code>labels_verified.csv</code>
+        со всеми принятыми записями. Можно нажимать в любой момент, прогресс не теряется.</li>
+      <li><b>Горячие клавиши.</b> <kbd>пробел</kbd> слушать · <kbd>Enter</kbd> принять ·
+        <kbd>S</kbd> не разобрать · <kbd>R</kbd> сбросить · <kbd>←</kbd> <kbd>→</kbd>
+        между записями.</li>
+      <li><b>Прогресс сохраняется в браузере</b> — вкладку можно закрыть и вернуться позже.</li>
+    </ul>
+  </details>
 </div>
-
-<canvas id="cv"></canvas>
-
-<p id="meta" class="num"></p>
-<p id="note"></p>
-<p style="color:#888">
-  <kbd>←</kbd><kbd>→</kbd> между записями &nbsp;·&nbsp; <kbd>пробел</kbd> слушать &nbsp;·&nbsp; <kbd>f</kbd> слушать ×4
-  &nbsp;·&nbsp; <kbd>Enter</kbd> принять &nbsp;·&nbsp; <kbd>s</kbd> пропустить
-  &nbsp;·&nbsp; <kbd>r</kbd> вернуть авто.
-  Синие метки тянутся мышью. Зелёное — громкость ударов, голубое внизу — периодичность.
-  Прогресс сохраняется в браузере, случайное закрытие вкладки его не потеряет.
-</p>
 
 <script>
 const DATA = __PAYLOAD__;
-const items = DATA.items;
 const KEY = "korotkoff-annotations-v1";
 
+let items = DATA.items.slice();
 let state = {};
-try { state = JSON.parse(localStorage.getItem(KEY) || "{}"); } catch (e) { state = {}; }
+try { state = JSON.parse(localStorage.getItem(KEY) || "{}"); } catch (e) {}
 
-let idx = 0, drag = null, audioEl = null;
+let idx = 0, drag = null, rate = 4, audioEl = null, raf = null;
 const cv = document.getElementById("cv"), ctx = cv.getContext("2d");
+const $ = id => document.getElementById(id);
 
-function cur() { return items[idx]; }
+const GRAB_PX = 10;          // радиус захвата метки; дальше — перемотка
+const cur = () => items[idx];
 
 function marks() {
   const it = cur(), st = state[it.id];
   return st ? { start: st.start, end: st.end, verified: !!st.verified, skipped: !!st.skipped }
             : { start: it.start, end: it.end, verified: false, skipped: false };
 }
-
 function setMarks(m) {
   state[cur().id] = m;
   try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
 }
 
+/* ---------- порядок записей ---------- */
+function sortItems(mode, keepCurrent = true) {
+  const id0 = keepCurrent && cur() ? cur().id : null;
+  if (mode === "id") items.sort((a, b) => a.id - b.id);
+  else if (mode === "hard") items.sort((a, b) => b.prio - a.prio || a.id - b.id);
+  else items.sort((a, b) => a.prio - b.prio || a.id - b.id);   // понятные сначала
+  // При первой сортировке начинаем с начала списка: иначе открылась бы та
+  // запись, что случайно оказалась первой в исходном порядке файла.
+  const at = id0 === null ? -1 : items.findIndex(i => i.id === id0);
+  idx = at >= 0 ? at : 0;
+  draw();
+}
+
+/* ---------- рисование ---------- */
 function resize() {
   const r = cv.getBoundingClientRect();
   cv.width = Math.max(1, r.width * devicePixelRatio);
@@ -77,15 +216,14 @@ function resize() {
 }
 addEventListener("resize", resize);
 
-function W() { return cv.width / devicePixelRatio; }
-function H() { return cv.height / devicePixelRatio; }
+const W = () => cv.width / devicePixelRatio;
+const H = () => cv.height / devicePixelRatio;
 const t2x = t => (t / cur().dur) * W();
 const x2t = x => (x / W()) * cur().dur;
 
 function series(arr, top, height, colour, fill) {
   if (!arr || !arr.length) return;
-  ctx.strokeStyle = colour;
-  ctx.lineWidth = 1.2;
+  ctx.strokeStyle = colour; ctx.lineWidth = 1.2;
   ctx.beginPath();
   arr.forEach((v, i) => {
     const x = (i / (arr.length - 1 || 1)) * W();
@@ -99,83 +237,178 @@ function series(arr, top, height, colour, fill) {
   }
 }
 
+function fmt(t) {
+  const m = Math.floor(t / 60), s = t - m * 60;
+  return `${m}:${s.toFixed(1).padStart(4, "0").replace(".", ",")}`;
+}
+
 function draw() {
   const it = cur(), m = marks();
   ctx.clearRect(0, 0, W(), H());
 
-  ctx.fillStyle = m.verified ? "rgba(120,200,120,0.13)" : "rgba(90,170,255,0.13)";
+  // выбранный интервал
+  ctx.fillStyle = m.verified ? "rgba(92,201,138,.13)" : "rgba(74,158,255,.11)";
   ctx.fillRect(t2x(m.start), 0, t2x(m.end) - t2x(m.start), H());
 
-  series(it.env, 6, H() * 0.60, "#7fd67f", "rgba(127,214,127,0.10)");
-  series(it.per, H() * 0.68, H() * 0.28, "#68b8e8", "rgba(104,184,232,0.10)");
-
-  ctx.strokeStyle = "#333"; ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(0, H() * 0.66); ctx.lineTo(W(), H() * 0.66); ctx.stroke();
-
   // секундная сетка
-  ctx.fillStyle = "#666"; ctx.font = "10px sans-serif";
+  ctx.font = "10px system-ui, sans-serif";
   const step = it.dur > 25 ? 5 : 2;
   for (let s = 0; s <= it.dur; s += step) {
     const x = t2x(s);
-    ctx.strokeStyle = "#262626";
+    ctx.strokeStyle = "#20252b"; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H()); ctx.stroke();
-    ctx.fillText(s + "с", x + 2, H() - 3);
+    ctx.fillStyle = "#5c656f"; ctx.fillText(s + " с", x + 3, H() - 4);
   }
 
-  [["start", "#4af"], ["end", "#4af"]].forEach(([k, col]) => {
+  series(it.env, 8, H() * 0.58, "#7fd67f", "rgba(127,214,127,.10)");
+  series(it.per, H() * 0.68, H() * 0.26, "#68b8e8", "rgba(104,184,232,.10)");
+
+  ctx.strokeStyle = "#262c33"; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0, H() * 0.66); ctx.lineTo(W(), H() * 0.66); ctx.stroke();
+
+  // метки
+  ["start", "end"].forEach(k => {
     const x = t2x(m[k]);
-    ctx.strokeStyle = col; ctx.lineWidth = 2;
+    ctx.strokeStyle = "#4a9eff"; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H()); ctx.stroke();
-    ctx.fillStyle = col; ctx.font = "12px sans-serif";
-    ctx.fillText(m[k].toFixed(2), x + 4, 14);
+    // ручка для захвата
+    ctx.fillStyle = "#4a9eff";
+    ctx.fillRect(x - 4, 0, 8, 16);
+    ctx.fillStyle = "#0f1113"; ctx.font = "bold 10px system-ui, sans-serif";
+    ctx.fillText(k === "start" ? "н" : "к", x - 3, 12);
+    ctx.fillStyle = "#8cc4ff"; ctx.font = "12px system-ui, sans-serif";
+    const lbl = m[k].toFixed(2) + " с";
+    ctx.fillText(lbl, k === "start" ? x + 7 : x - ctx.measureText(lbl).width - 7, 28);
   });
 
+  // плейхед
+  if (audioEl) {
+    const x = t2x(Math.min(audioEl.currentTime, it.dur));
+    ctx.strokeStyle = "#f5f5f5"; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H()); ctx.stroke();
+    ctx.fillStyle = "#f5f5f5";
+    ctx.beginPath(); ctx.moveTo(x - 5, 0); ctx.lineTo(x + 5, 0); ctx.lineTo(x, 8);
+    ctx.closePath(); ctx.fill();
+  }
+
+  // подписи вокруг канваса
   const nDone = Object.values(state).filter(v => v.verified).length;
-  document.getElementById("pos").textContent = `${idx + 1} / ${items.length}`;
-  document.getElementById("done").textContent = `принято ${nDone}`;
-  document.getElementById("meta").textContent =
-    `id ${it.id} · длительность ${it.dur.toFixed(1)} с · уверенность детектора ` +
-    `${it.conf.toFixed(2)} · интервал ${(m.end - m.start).toFixed(2)} с` +
-    (m.verified ? " · ПРИНЯТО" : m.skipped ? " · пропущено" : "");
-  document.getElementById("note").textContent = it.note ? "⚠ " + it.note : "";
+  $("rid").textContent = "Запись " + it.id;
+  $("meta").textContent =
+    `${it.dur.toFixed(1)} с · интервал ${(m.end - m.start).toFixed(2)} с · ` +
+    `уверенность автодетектора ${it.conf.toFixed(2)}`;
+  const b = $("badge");
+  b.hidden = !(m.verified || m.skipped);
+  b.className = "badge " + (m.verified ? "done" : "skip");
+  b.textContent = m.verified ? "принято" : "пропущено";
+  $("pos").textContent = `${idx + 1} из ${items.length}`;
+  $("done").textContent = `· принято ${nDone}`;
+  $("barfill").style.width = (100 * nDone / items.length) + "%";
+
+  const w = $("warn");
+  if (it.note) {
+    w.hidden = false;
+    const note = it.note.charAt(0).toUpperCase() + it.note.slice(1);
+    w.innerHTML = "<b>Автодетектор не уверен в этой записи.</b> " + note +
+      ". Проверьте метки внимательнее: если ударов не видно и не слышно, " +
+      "нажмите «Не разобрать».";
+  } else w.hidden = true;
+
+  updateTime();
 }
 
+/* ---------- мышь: захват метки или перемотка ---------- */
 cv.addEventListener("mousedown", e => {
   const m = marks();
-  drag = Math.abs(e.offsetX - t2x(m.start)) < Math.abs(e.offsetX - t2x(m.end)) ? "start" : "end";
+  const ds = Math.abs(e.offsetX - t2x(m.start)), de = Math.abs(e.offsetX - t2x(m.end));
+  if (Math.min(ds, de) <= GRAB_PX) { drag = ds < de ? "start" : "end"; return; }
+  seekTo(x2t(e.offsetX));                       // клик по пустому месту — перемотка
 });
 addEventListener("mouseup", () => { drag = null; });
 cv.addEventListener("mousemove", e => {
-  if (!drag) return;
+  if (!drag) {
+    const m = marks();
+    const near = Math.min(Math.abs(e.offsetX - t2x(m.start)),
+                          Math.abs(e.offsetX - t2x(m.end))) <= GRAB_PX;
+    cv.style.cursor = near ? "ew-resize" : "pointer";
+    return;
+  }
   const m = marks();
   m[drag] = Math.max(0, Math.min(cur().dur, x2t(e.offsetX)));
-  if (m.start > m.end) { const t = m.start; m.start = m.end; m.end = t; }
+  if (m.start > m.end) { const t = m.start; m.start = m.end; m.end = t;
+                         drag = drag === "start" ? "end" : "start"; }
   setMarks(m); draw();
 });
 
+/* ---------- плеер ---------- */
+function ensureAudio() {
+  if (audioEl) return audioEl;
+  if (!cur().audio) return null;
+  audioEl = new Audio("data:audio/wav;base64," + cur().audio);
+  applyRate();
+  audioEl.addEventListener("ended", () => { stopLoop(); $("play").textContent = "▶ Слушать"; draw(); });
+  // Плейхед рисуется через requestAnimationFrame, а его браузер останавливает
+  // в скрытой вкладке. timeupdate продолжает приходить, поэтому цифры и полоса
+  // не застывают, если переключиться на другое окно и вернуться.
+  audioEl.addEventListener("timeupdate", updateTime);
+  return audioEl;
+}
+function applyRate() {
+  if (!audioEl) return;
+  // Тоны Короткова лежат в 20-200 Гц и на динамиках ноутбука почти не слышны.
+  // Ускорение со сдвигом высоты переносит их в слышимый диапазон.
+  audioEl.playbackRate = rate;
+  audioEl.preservesPitch = false;
+  audioEl.mozPreservesPitch = false;
+  audioEl.webkitPreservesPitch = false;
+}
+function loop() {
+  updateTime(); draw();
+  raf = requestAnimationFrame(loop);
+}
+function stopLoop() { if (raf) cancelAnimationFrame(raf); raf = null; }
+
+function togglePlay() {
+  const a = ensureAudio();
+  if (!a) return;
+  if (a.paused) {
+    if (a.currentTime >= cur().dur - 0.05) a.currentTime = 0;
+    a.play().then(() => { $("play").textContent = "⏸ Пауза"; loop(); }).catch(() => {});
+  } else {
+    a.pause(); stopLoop(); $("play").textContent = "▶ Слушать"; draw();
+  }
+}
+function seekTo(t) {
+  const a = ensureAudio();
+  if (!a) return;
+  a.currentTime = Math.max(0, Math.min(cur().dur - 0.01, t));
+  updateTime(); draw();
+}
+function updateTime() {
+  const t = audioEl ? audioEl.currentTime : 0, d = cur().dur;
+  $("time").textContent = `${fmt(t)} / ${fmt(d)}`;
+  $("fill").style.width = (100 * Math.min(t / d, 1)) + "%";
+}
+$("seek").addEventListener("click", e => {
+  const r = $("seek").getBoundingClientRect();
+  seekTo(((e.clientX - r.left) / r.width) * cur().dur);
+});
+document.querySelectorAll(".rates button").forEach(b => {
+  b.onclick = () => {
+    rate = +b.dataset.rate;
+    document.querySelectorAll(".rates button").forEach(x => x.classList.toggle("on", x === b));
+    applyRate();
+  };
+});
+
+/* ---------- навигация и решения ---------- */
 function load(i) {
   idx = (i + items.length) % items.length;
   if (audioEl) { audioEl.pause(); audioEl = null; }
+  stopLoop();
+  $("play").textContent = "▶ Слушать";
   draw();
 }
-
-function play(rate) {
-  if (audioEl) { audioEl.pause(); audioEl = null; return; }
-  if (!cur().audio) return;
-  audioEl = new Audio("data:audio/wav;base64," + cur().audio);
-  if (rate && rate !== 1) {
-    // Тоны Короткова лежат в 20-200 Гц и на динамиках ноутбука почти не слышны.
-    // Ускорение со сдвигом высоты переносит их в 80-800 Гц. Время при этом
-    // сжимается вчетверо — для оценки на слух, не для точной постановки меток.
-    audioEl.playbackRate = rate;
-    audioEl.preservesPitch = false;
-    audioEl.mozPreservesPitch = false;
-    audioEl.webkitPreservesPitch = false;
-  }
-  audioEl.currentTime = Math.max(0, marks().start - 0.5);
-  audioEl.play().catch(() => {});
-}
-
 function mark(flag) {
   const m = marks();
   m.verified = flag === "verified";
@@ -184,26 +417,24 @@ function mark(flag) {
   load(idx + 1);
 }
 
-document.getElementById("prev").onclick = () => load(idx - 1);
-document.getElementById("next").onclick = () => load(idx + 1);
-document.getElementById("play").onclick = () => play(1);
-document.getElementById("play4").onclick = () => play(4);
-document.getElementById("accept").onclick = () => mark("verified");
-document.getElementById("skip").onclick = () => mark("skipped");
-document.getElementById("reset").onclick = () => {
+$("play").onclick = togglePlay;
+$("prev").onclick = () => load(idx - 1);
+$("next").onclick = () => load(idx + 1);
+$("accept").onclick = () => mark("verified");
+$("skip").onclick = () => mark("skipped");
+$("reset").onclick = () => {
   delete state[cur().id];
   try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
   draw();
 };
-document.getElementById("save").onclick = () => {
+$("order").onchange = e => sortItems(e.target.value);
+$("save").onclick = () => {
   const lines = ["id,start,end,verified"];
   items.forEach(it => {
     const st = state[it.id];
-    if (st && st.verified) {
-      lines.push(`${it.id},${st.start.toFixed(3)},${st.end.toFixed(3)},1`);
-    }
+    if (st && st.verified) lines.push(`${it.id},${st.start.toFixed(3)},${st.end.toFixed(3)},1`);
   });
-  if (lines.length === 1) { alert("Пока ничего не принято."); return; }
+  if (lines.length === 1) { alert("Пока ни одна запись не принята."); return; }
   const url = URL.createObjectURL(new Blob([lines.join("\n") + "\n"], { type: "text/csv" }));
   const a = document.createElement("a");
   a.href = url; a.download = "labels_verified.csv"; a.click();
@@ -211,14 +442,20 @@ document.getElementById("save").onclick = () => {
 };
 
 addEventListener("keydown", e => {
+  if (e.target.tagName === "SELECT") return;
   if (e.key === "ArrowLeft") load(idx - 1);
   else if (e.key === "ArrowRight") load(idx + 1);
-  else if (e.key === " ") { e.preventDefault(); play(1); }
-  else if (e.key === "f") play(4);
+  else if (e.key === " ") { e.preventDefault(); togglePlay(); }
   else if (e.key === "Enter") mark("verified");
-  else if (e.key === "s") mark("skipped");
-  else if (e.key === "r") document.getElementById("reset").click();
+  else if (e.key === "s" || e.key === "ы") mark("skipped");
+  else if (e.key === "r" || e.key === "к") $("reset").click();
 });
 
+// Вернулись на вкладку — возобновить отрисовку плейхеда.
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && audioEl && !audioEl.paused && !raf) loop();
+});
+
+sortItems("easy", false);
 resize();
 </script>

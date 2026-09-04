@@ -82,11 +82,42 @@ def _downsample(v, n_out, robust=True):
     return [round(x, 4) for x in np.clip(out / scale, 0.0, 1.0)]
 
 
-def build_payload(rows, labels, limit=200, offset=0, load_audio=True):
-    """Собирает данные страницы. Порядок — по убыванию приоритета проверки."""
+def select(known, labels, limit, offset=0, strategy="spread"):
+    """Какие записи показать человеку.
+
+    "spread" — равномерная выборка по всему диапазону приоритета. Так человек
+    видит и понятные записи, и трудные, а обучающая выборка получается
+    представительной. Отбор одних только трудных случаев смещал бы метки:
+    модель училась бы на нетипичных записях.
+
+    "hard" — только самые трудные подряд, для второго захода поверх готовой
+    выборки.
+
+    offset сдвигает выборку внутри шага, чтобы следующий файл не повторил
+    предыдущий. Дубликаты исключены по построению: индекс в ранжированном
+    списке считается один раз и не клампится к границе.
+    """
+    ranked = sorted(known, key=lambda r: (-labels[r["id"]]["priority"], r["id"]))
+    if strategy == "hard":
+        return ranked[offset : offset + limit]
+    if limit >= len(ranked):
+        return ranked[offset:]
+
+    gap = len(ranked) / limit
+    picked, seen = [], set()
+    for i in range(limit):
+        j = int(i * gap) + offset
+        if j >= len(ranked) or j in seen:
+            continue
+        seen.add(j)
+        picked.append(ranked[j])
+    return picked
+
+
+def build_payload(rows, labels, limit=200, offset=0, load_audio=True, strategy="spread"):
+    """Собирает данные страницы."""
     known = [r for r in rows if r["id"] in labels]
-    known.sort(key=lambda r: (-labels[r["id"]]["priority"], r["id"]))
-    chosen = known[offset : offset + limit]
+    chosen = select(known, labels, limit, offset, strategy)
 
     items = []
     for r in chosen:
@@ -97,6 +128,7 @@ def build_payload(rows, labels, limit=200, offset=0, load_audio=True):
             "start": float(lab["start"]),
             "end": float(lab["end"]),
             "conf": float(lab["confidence"]),
+            "prio": float(lab["priority"]),
             "note": lab.get("note", ""),
             "env": [],
             "per": [],
@@ -139,17 +171,25 @@ def read_labels(path):
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description="Собрать HTML-разметчик")
     ap.add_argument("--limit", type=int, default=200, help="записей в одном файле")
-    ap.add_argument("--offset", type=int, default=0, help="пропустить N по приоритету")
+    ap.add_argument("--offset", type=int, default=0, help="сдвиг выборки")
+    ap.add_argument("--strategy", choices=("spread", "hard"), default="spread",
+                    help="spread — равномерно по всему диапазону; hard — только трудные")
     ap.add_argument("--out", default=None)
     a = ap.parse_args()
 
     rows = [r for r in manifest.read() if r["status"] in ("ok", "suspect")]
     labels = read_labels(config.DATA_DIR / "labels_auto.csv")
-    payload = build_payload(rows, labels, limit=a.limit, offset=a.offset)
+    payload = build_payload(rows, labels, limit=a.limit, offset=a.offset,
+                            strategy=a.strategy)
     out = Path(a.out or config.DATA_DIR / f"annotator_{a.offset:04d}.html")
     out.write_text(render(payload, Path(__file__).parent / "annotator_template.html"))
     size = out.stat().st_size / 1e6
     print(f"готово: {out}")
     print(f"  записей: {len(payload['items'])} из {payload['total']} "
           f"(пропущено {a.offset}), размер {size:.1f} МБ")
-    print("  открыть в браузере, выверить метки, нажать «Сохранить CSV»")
+    prios = [payload["items"][i]["prio"] for i in range(len(payload["items"]))]
+    if prios:
+        import statistics
+        print(f"  приоритет проверки: от {min(prios):.2f} до {max(prios):.2f}, "
+              f"медиана {statistics.median(prios):.2f}")
+    print("  открыть в браузере, выверить метки, нажать «Скачать разметку»")
