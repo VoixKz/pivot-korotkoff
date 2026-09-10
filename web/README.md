@@ -18,8 +18,18 @@ Workflow `.github/workflows/pages.yml` публикует содержимое `
 при каждом изменении в ветке `main`.
 
 Один раз включить в настройках репозитория: **Settings → Pages → Source →
-GitHub Actions**. После этого адрес вида
-`https://<пользователь>.github.io/<репозиторий>/`.
+GitHub Actions**, или из терминала:
+
+```bash
+gh api -X POST repos/<владелец>/<репозиторий>/pages -f build_type=workflow
+```
+
+Без этого шага деплой падает на `configure-pages` с ошибкой
+`Get Pages site failed. Error: Not Found`, а при `enablement: true` — с
+`Resource not accessible by integration`: штатный `GITHUB_TOKEN` не имеет
+права создавать сайт Pages, поэтому включить его из самого workflow нельзя.
+
+После этого адрес вида `https://<пользователь>.github.io/<репозиторий>/`.
 
 ## Из чего состоит
 
