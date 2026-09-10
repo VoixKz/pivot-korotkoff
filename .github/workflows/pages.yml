@@ -1,5 +1,14 @@
 name: Deploy web demo to GitHub Pages
 
+# Pages должен быть включён в репозитории заранее, один раз:
+#   Settings → Pages → Source: GitHub Actions
+# или  gh api -X POST repos/<владелец>/<репозиторий>/pages -f build_type=workflow
+#
+# Сам workflow включить его не может. У configure-pages есть `enablement: true`,
+# но создание сайта Pages требует прав администратора, а штатный GITHUB_TOKEN
+# получает отказ "Resource not accessible by integration". Именно на этом
+# падали первые запуски.
+
 on:
   push:
     branches: [main]
@@ -11,9 +20,11 @@ permissions:
   pages: write
   id-token: write
 
+# Один деплой за раз. Начатый не прерываем: оборванная публикация может
+# оставить зависшее развёртывание, поэтому новые запуски ждут в очереди.
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   deploy:
@@ -22,12 +33,12 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/configure-pages@v5
-        with:
-          enablement: true
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/checkout@v7
+      - uses: actions/configure-pages@v6
+      # С v4 dot-файлы в артефакт не попадают. Для web/ это неважно: при
+      # деплое через Actions Jekyll не запускается и .nojekyll не нужен.
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: web
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
